@@ -12,6 +12,11 @@ const port: number = parseInt(Deno.args[1], 10);
 const usersMap = new Map<string, User>();
 const groupsMap = new Map<string, Group>();
 
+const colors = [
+    "red", "blue", "green", "purple", "yellow", "brown",
+    "orange", "teal", "violet", "pink", "grey", "black",
+];
+
 listenAndServe({ port }, (req: ServerRequest) => {
     if (acceptable(req)) {
         acceptWebSocket({
@@ -25,7 +30,6 @@ listenAndServe({ port }, (req: ServerRequest) => {
             
             // Listen to messages from client
             for await (const data of ws) {
-                console.log("data:", data, "userId:", userId);
                 const event = typeof data === "string" ? JSON.parse(data.toString()) : data;
                 switch (event.code) {
                     case Code.JOIN:
@@ -59,11 +63,12 @@ listenAndServe({ port }, (req: ServerRequest) => {
                         }
                         
                         // Create user
-                        const userObject = {
+                        const userObject: User = {
                             userId,
                             name,
                             groupName,
                             ws,
+                            color: colors[usersInGroup.length % colors.length],
                         }
 
                         // Store user
@@ -81,9 +86,17 @@ listenAndServe({ port }, (req: ServerRequest) => {
                         // Send own information to new user
                         emitNewUser(userObject);
 
+                        // Get old messages from first user, and send them to joining user
+                        emitGetOldMessages(groupName, userId);
+
                         // Broadcast to all group members about the user joining
                         emitUpdateUsers(groupName);
                         
+                        break;
+                    }
+                    case Code.RETURN_MESSAGES: {
+                        const { messages, requestedUserId } = event.data;
+                        emitOldMessages(messages, requestedUserId);
                         break;
                     }
                     case Code.CLOSE: {
@@ -119,7 +132,7 @@ listenAndServe({ port }, (req: ServerRequest) => {
                     }
                     case Code.MESSAGE: {
                         const { message } = event.data;
-                        const groupName = usersMap.get(message.userId)?.groupName;
+                        const groupName = usersMap.get(message.user.userId)?.groupName;
 
                         if (groupName) {
                             emitMessage(groupName, message);
@@ -176,6 +189,33 @@ listenAndServe({ port }, (req: ServerRequest) => {
         }
         for (const user of users) {
             user.ws.send(JSON.stringify(event));
+        }
+    }
+
+    function emitGetOldMessages(groupName: string, userId: string): void {
+        const users = groupsMap.get(groupName) || [];
+        if (users.length > 1) { // There was a user before the joining one
+            const firstUser = users[0];
+            const event = {
+                code: Code.REQUEST_MESSAGES,
+                data: {
+                    requestedUserId: userId,
+                }
+            }
+            firstUser.ws.send(JSON.stringify(event));
+        }
+    }
+
+    function emitOldMessages(messages: Message[], requestedUserId: string): void {
+        const requestedUser = usersMap.get(requestedUserId);
+        if (requestedUser) {
+            const event = {
+                code: Code.RETURN_MESSAGES,
+                data: {
+                    messages,
+                }
+            }
+            requestedUser.ws.send(JSON.stringify(event));
         }
     }
 })
