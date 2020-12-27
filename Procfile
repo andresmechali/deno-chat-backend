@@ -1,0 +1,1 @@
+web: deno run --allow-net=8080 index.ts 8080
