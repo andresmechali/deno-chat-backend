@@ -1,1 +1,1 @@
-web: deno run --allow-env --allow-net=8080 index.ts
+web: deno run --allow-env --allow-net index.ts
