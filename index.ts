@@ -2,20 +2,25 @@ import { listenAndServe, ServerRequest } from "https://deno.land/std/http/server
 import { acceptWebSocket, acceptable } from "https://deno.land/std/ws/mod.ts";
 import { v4 } from "https://deno.land/std/uuid/mod.ts";
 import "https://deno.land/x/dotenv/load.ts";
+import {
+    emitNewUser,
+    emitUpdateUsers,
+    emitMessage,
+    emitGetMessages,
+    emitMessages
+} from "./chat.ts";
 
 const hostname: string = "0.0.0.0";
 const port: number = parseInt(Deno.env.get("PORT") || "8080", 10);
 
-import {User, Group, Code, Message, ErrorCode} from "./types.ts";
+import { User, Group, Code, ErrorCode, Color } from "./types.ts";
 
 // Create Maps to store data
 const usersMap = new Map<string, User>();
 const groupsMap = new Map<string, Group>();
 
-const colors = [
-    "red", "blue", "green", "purple", "yellow", "brown",
-    "orange", "teal", "violet", "pink", "grey", "black",
-];
+// List of colors to be assigned to users
+const colors: Color[] = Object.values(Color)
 
 listenAndServe({ hostname, port }, (req: ServerRequest) => {
     if (acceptable(req)) {
@@ -87,16 +92,20 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                         emitNewUser(userObject);
 
                         // Get old messages from first user, and send them to joining user
-                        emitGetOldMessages(groupName, userId);
+                        const users = groupsMap.get(groupName) || [];
+                        emitGetMessages(users, userId);
 
                         // Broadcast to all group members about the user joining
-                        emitUpdateUsers(groupName);
+                        emitUpdateUsers(users);
                         
                         break;
                     }
                     case Code.RETURN_MESSAGES: {
                         const { messages, requestedUserId } = event.data;
-                        emitOldMessages(messages, requestedUserId);
+                        const requestedUser = usersMap.get(requestedUserId);
+                        if (requestedUser) {
+                            emitMessages(messages, requestedUser);
+                        }
                         break;
                     }
                     case Code.CLOSE: {
@@ -125,7 +134,8 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                             }
 
                             // Broadcast updated user list
-                            emitUpdateUsers(groupName);
+                            const users = groupsMap.get(groupName) || [];
+                            emitUpdateUsers(users);
                         }
 
                         break;
@@ -135,7 +145,8 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                         const groupName = usersMap.get(message.user.userId)?.groupName;
 
                         if (groupName) {
-                            emitMessage(groupName, message);
+                            const users = groupsMap.get(groupName) || [];
+                            emitMessage(users, message);
                         }
 
                         break;
@@ -149,74 +160,6 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                 }
             }
         })
-    }
-
-    function emitNewUser(user: User): void {
-        // Split ws so that it is not sent to the client
-        const { ws, ...newUser} = user;
-        const event = {
-            code: Code.JOIN,
-            data: {
-                user: newUser,
-            }
-        }
-        ws.send(JSON.stringify(event));
-    }
-
-    function emitUpdateUsers(groupName: string): void {
-        const users = groupsMap.get(groupName) || [];
-        const event = {
-            code: Code.USERS,
-            data: {
-                users
-            },
-        }
-        for (const user of users) {
-            user.ws.send(JSON.stringify(event));
-        }
-    }
-
-    function emitMessage(groupName: string, message: Message): void {
-        const users = groupsMap.get(groupName) || [];
-        const event = {
-            code: Code.MESSAGE,
-            data: {
-                message: {
-                    ...message,
-                    messageId: v4.generate(),
-                },
-            },
-        }
-        for (const user of users) {
-            user.ws.send(JSON.stringify(event));
-        }
-    }
-
-    function emitGetOldMessages(groupName: string, userId: string): void {
-        const users = groupsMap.get(groupName) || [];
-        if (users.length > 1) { // There was a user before the joining one
-            const firstUser = users[0];
-            const event = {
-                code: Code.REQUEST_MESSAGES,
-                data: {
-                    requestedUserId: userId,
-                }
-            }
-            firstUser.ws.send(JSON.stringify(event));
-        }
-    }
-
-    function emitOldMessages(messages: Message[], requestedUserId: string): void {
-        const requestedUser = usersMap.get(requestedUserId);
-        if (requestedUser) {
-            const event = {
-                code: Code.RETURN_MESSAGES,
-                data: {
-                    messages,
-                }
-            }
-            requestedUser.ws.send(JSON.stringify(event));
-        }
     }
 })
 

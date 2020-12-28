@@ -37,3 +37,18 @@ export enum Code {
     USERS = 4101,
     ERROR = 4300,
 }
+
+export enum Color {
+    RED = "red",
+    BLUE = "blue",
+    GREEN = "green",
+    PURPLE = "purple",
+    YELLOW = "yellow",
+    BROWN = "brown",
+    ORANGE = "orange",
+    TEAL = "teal",
+    VIOLET = "violet",
+    PINK = "pink",
+    GREY = "grey",
+    BLACK = "black",
+}
