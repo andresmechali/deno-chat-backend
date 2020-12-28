@@ -1,9 +1,10 @@
 import { listenAndServe, ServerRequest } from "https://deno.land/std/http/server.ts";
 import { acceptWebSocket, acceptable } from "https://deno.land/std/ws/mod.ts";
 import { v4 } from "https://deno.land/std/uuid/mod.ts";
+import "https://deno.land/x/dotenv/load.ts";
 
-const hostname = "0.0.0.0";
-const port = 8080;
+const hostname: string = "0.0.0.0";
+const port: number = parseInt(Deno.env.get("PORT") || "8080", 10);
 
 import {User, Group, Code, Message, ErrorCode} from "./types.ts";
 
