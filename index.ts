@@ -1,12 +1,11 @@
 import { listenAndServe, ServerRequest } from "https://deno.land/std/http/server.ts";
-import { acceptWebSocket, acceptable, WebSocketEvent, WebSocket } from "https://deno.land/std/ws/mod.ts";
+import { acceptWebSocket, acceptable } from "https://deno.land/std/ws/mod.ts";
 import { v4 } from "https://deno.land/std/uuid/mod.ts";
 
-import {User, Group, Code, Message, ErrorCode} from "./types.ts";
+const hostname = "0.0.0.0";
+const port = 8080;
 
-// Parse arguments
-const hostname: string = Deno.args[0];
-const port: number = parseInt(Deno.args[1], 10);
+import {User, Group, Code, Message, ErrorCode} from "./types.ts";
 
 // Create Maps to store data
 const usersMap = new Map<string, User>();
@@ -17,7 +16,7 @@ const colors = [
     "orange", "teal", "violet", "pink", "grey", "black",
 ];
 
-listenAndServe({ port }, (req: ServerRequest) => {
+listenAndServe({ hostname, port }, (req: ServerRequest) => {
     if (acceptable(req)) {
         acceptWebSocket({
             conn: req.conn,
