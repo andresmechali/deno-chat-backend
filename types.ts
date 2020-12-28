@@ -30,6 +30,7 @@ export type Group = User[];
 
 export enum Code {
     CLOSE = 1001,
+    PING = 4000,
     JOIN = 4001,
     MESSAGE = 4002,
     REQUEST_MESSAGES = 4003,

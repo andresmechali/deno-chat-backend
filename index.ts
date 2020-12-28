@@ -3,6 +3,7 @@ import { acceptWebSocket, acceptable } from "https://deno.land/std/ws/mod.ts";
 import { v4 } from "https://deno.land/std/uuid/mod.ts";
 import "https://deno.land/x/dotenv/load.ts";
 import {
+    emitPing,
     emitNewUser,
     emitUpdateUsers,
     emitMessage,
@@ -149,6 +150,13 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                             emitMessage(users, message);
                         }
 
+                        break;
+                    }
+                    case Code.PING: {
+                        const user = usersMap.get(userId);
+                        if (user) {
+                            emitPing(user);
+                        }
                         break;
                     }
                     default:

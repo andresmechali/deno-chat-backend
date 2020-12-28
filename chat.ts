@@ -2,6 +2,17 @@ import { v4 } from "https://deno.land/std/uuid/mod.ts";
 import { Code, Message, User } from "./types.ts";
 
 /**
+ * Send ping to a given user
+ * @param user
+ */
+export const emitPing = (user: User): void => {
+    const event = {
+        code: Code.PING,
+    }
+    user.ws.send(JSON.stringify(event));
+}
+
+/**
  * Send user object to a user
  * Used for sending own data when a user joins
  * @param user: new user
