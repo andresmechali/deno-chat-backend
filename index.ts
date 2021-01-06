@@ -1,174 +1,189 @@
-import { listenAndServe, ServerRequest } from "https://deno.land/std/http/server.ts";
-import { acceptWebSocket, acceptable } from "https://deno.land/std/ws/mod.ts";
+import {
+  listenAndServe,
+  ServerRequest,
+} from "https://deno.land/std/http/server.ts";
+import { acceptable, acceptWebSocket } from "https://deno.land/std/ws/mod.ts";
 import { v4 } from "https://deno.land/std/uuid/mod.ts";
 import "https://deno.land/x/dotenv/load.ts";
 import {
-    emitPing,
-    emitNewUser,
-    emitUpdateUsers,
-    emitMessage,
-    emitGetMessages,
-    emitMessages
+  emitGetMessages,
+  emitMessage,
+  emitMessages,
+  emitNewUser,
+  emitPing,
+  emitUpdateUsers,
 } from "./chat.ts";
 
 const hostname: string = "0.0.0.0";
 const port: number = parseInt(Deno.env.get("PORT") || "8080", 10);
 
-import { User, Group, Code, ErrorCode, Color } from "./types.ts";
+import { Code, Color, ErrorCode, GroupData, User } from "./types.ts";
 
 // Create Maps to store data
 const usersMap = new Map<string, User>();
-const groupsMap = new Map<string, Group>();
+const groupsDataMap = new Map<string, GroupData>();
 
 // List of colors to be assigned to users
-const colors: Color[] = Object.values(Color)
+const colors: Color[] = Object.values(Color);
 
 listenAndServe({ hostname, port }, (req: ServerRequest) => {
-    if (acceptable(req)) {
-        acceptWebSocket({
-            conn: req.conn,
-            bufReader: req.r,
-            bufWriter : req.w,
-            headers: req.headers,
-        }).then(async (ws) => {
-            // Generate unique user id
-            const userId: string = v4.generate();
-            
-            // Listen to messages from client
-            for await (const data of ws) {
-                const event = typeof data === "string" ? JSON.parse(data.toString()) : data;
-                switch (event.code) {
-                    case Code.JOIN:
-                    {
-                        /**
-                         * New user has joined
-                         */
+  if (acceptable(req)) {
+    acceptWebSocket({
+      conn: req.conn,
+      bufReader: req.r,
+      bufWriter: req.w,
+      headers: req.headers,
+    }).then(async (ws) => {
+      // Generate unique user id
+      const userId: string = v4.generate();
 
-                        const { name, groupName } = event.data;
+      // Listen to messages from client
+      for await (const data of ws) {
+        const event = typeof data === "string"
+          ? JSON.parse(data.toString())
+          : data;
+        switch (event.code) {
+          case Code.JOIN: {
+            /**
+             * New user has joined
+             */
 
-                        /**
-                         * If user already exists, tell client
-                         */
-                        const usersInGroup: User[] = groupsMap.get(groupName) || [];
-                        if (usersInGroup.length > 0) {
-                            for (const _user of usersInGroup) {
-                                if (_user.name === name) {
-                                    const nameUsedEvent = {
-                                        code: Code.ERROR,
-                                        data: {
-                                            error: {
-                                                code: ErrorCode.NAME_USED,
-                                                description: `User ${name} already exists in current group`,
-                                            }
-                                        }
-                                    }
-                                    ws.send(JSON.stringify(nameUsedEvent));
-                                    return;
-                                }
-                            }
-                        }
-                        
-                        // Create user
-                        const userObject: User = {
-                            userId,
-                            name,
-                            groupName,
-                            ws,
-                            color: colors[usersInGroup.length % colors.length],
-                        }
+            const { name, groupName } = event.data;
 
-                        // Store user
-                        usersMap.set(userId, userObject);
+            // Create group if non existent
+            const group: GroupData = groupsDataMap.get(groupName) || {
+              users: [],
+              createdAt: new Date(),
+              userCount: 0,
+            };
 
-                        // Create group if non existent
-                        const group: Group = groupsMap.get(groupName) || [];
+            /**
+             * If user already exists, tell client
+             */
+            const usersInGroup: User[] = group.users;
 
-                        // Add user to group
-                        group.push(userObject);
-
-                        // Update group
-                        groupsMap.set(groupName, group);
-
-                        // Send own information to new user
-                        emitNewUser(userObject);
-
-                        // Get old messages from first user, and send them to joining user
-                        const users = groupsMap.get(groupName) || [];
-                        emitGetMessages(users, userId);
-
-                        // Broadcast to all group members about the user joining
-                        emitUpdateUsers(users);
-                        
-                        break;
-                    }
-                    case Code.RETURN_MESSAGES: {
-                        const { messages, requestedUserId } = event.data;
-                        const requestedUser = usersMap.get(requestedUserId);
-                        if (requestedUser) {
-                            emitMessages(messages, requestedUser);
-                        }
-                        break;
-                    }
-                    case Code.CLOSE: {
-                        /**
-                         * EndpointUnavailable
-                         * Client has become unavailable
-                         */
-                            // Get user who left
-                        const user = usersMap.get(userId);
-
-                        if (user) {
-                            const { groupName } = user;
-
-                            // Delete user
-                            usersMap.delete(userId);
-
-                            // Update group
-                            const nextUsers = groupsMap.get(groupName)?.filter((u: User) => {
-                                return u.userId !== userId;
-                            }) || [];
-
-                            if (nextUsers.length === 0) {
-                                groupsMap.delete(groupName);
-                            } else {
-                                groupsMap.set(groupName, nextUsers)
-                            }
-
-                            // Broadcast updated user list
-                            const users = groupsMap.get(groupName) || [];
-                            emitUpdateUsers(users);
-                        }
-
-                        break;
-                    }
-                    case Code.MESSAGE: {
-                        const { message } = event.data;
-                        const groupName = usersMap.get(message.user.userId)?.groupName;
-
-                        if (groupName) {
-                            const users = groupsMap.get(groupName) || [];
-                            emitMessage(users, message);
-                        }
-
-                        break;
-                    }
-                    case Code.PING: {
-                        const user = usersMap.get(userId);
-                        if (user) {
-                            emitPing(user);
-                        }
-                        break;
-                    }
-                    default:
-                    {
-                        console.log("unhandled event");
-                        console.log(event);
-                        break
-                    }
+            if (usersInGroup.length > 0) {
+              for (const _user of usersInGroup) {
+                if (_user.name === name) {
+                  const nameUsedEvent = {
+                    code: Code.ERROR,
+                    data: {
+                      error: {
+                        code: ErrorCode.NAME_USED,
+                        description:
+                          `User ${name} already exists in current group`,
+                      },
+                    },
+                  };
+                  ws.send(JSON.stringify(nameUsedEvent));
+                  return;
                 }
+              }
             }
-        })
-    }
-})
+
+            // Create user
+            const userObject: User = {
+              userId,
+              name,
+              groupName,
+              ws,
+              color: colors[group.userCount % colors.length],
+            };
+
+            // Store user
+            usersMap.set(userId, userObject);
+
+            // Add user to group
+            group.users.push(userObject);
+            group.userCount += 1;
+
+            // Update group
+            groupsDataMap.set(groupName, group);
+
+            // Send own information to new user
+            emitNewUser(userObject);
+
+            // Get old messages from first user, and send them to joining user
+            emitGetMessages(group.users, userId);
+
+            // Broadcast to all group members about the user joining
+            emitUpdateUsers(group.users);
+
+            break;
+          }
+          case Code.RETURN_MESSAGES: {
+            const { messages, requestedUserId } = event.data;
+            const requestedUser = usersMap.get(requestedUserId);
+            if (requestedUser) {
+              emitMessages(messages, requestedUser);
+            }
+            break;
+          }
+          case Code.CLOSE: {
+            /**
+             * EndpointUnavailable
+             * Client has become unavailable
+             */
+            // Get user who left
+            const user = usersMap.get(userId);
+
+            if (user) {
+              const { groupName } = user;
+
+              // Delete user
+              usersMap.delete(userId);
+
+              // Update group
+              const group = groupsDataMap.get(groupName);
+              if (group) {
+                const nextUsers = group.users?.filter((u: User) => {
+                  return u.userId !== userId;
+                }) || [];
+
+                if (nextUsers.length === 0) {
+                  groupsDataMap.delete(groupName);
+                } else {
+                  groupsDataMap.set(groupName, {
+                    ...group,
+                    users: nextUsers,
+                  });
+                }
+
+                // Broadcast updated user list
+                const users = groupsDataMap.get(groupName)?.users || [];
+                emitUpdateUsers(users);
+              }
+            }
+
+            break;
+          }
+          case Code.MESSAGE: {
+            const { message } = event.data;
+            const groupName = usersMap.get(message.user.userId)?.groupName;
+
+            if (groupName) {
+              const users = groupsDataMap.get(groupName)?.users || [];
+              emitMessage(users, message);
+            }
+
+            break;
+          }
+          case Code.PING: {
+            const user = usersMap.get(userId);
+            if (user) {
+              emitPing(user);
+            }
+            break;
+          }
+          default: {
+            console.log("unhandled event");
+            console.log(event);
+            break;
+          }
+        }
+      }
+    });
+  }
+});
 
 console.log(`Server running on ${hostname}:${port}`);
