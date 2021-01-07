@@ -71,7 +71,11 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                   error: {
                     code: ErrorCode.NAME_USED,
                     description:
-                        `User ${name} already exists in current group. Try another name.`,
+                        `User ${name} already exists in current group.`,
+                    information: {
+                      name,
+                      color: existingUser.color,
+                    }
                   },
                 },
               };

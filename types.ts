@@ -24,6 +24,10 @@ export enum ErrorCode {
 export interface Error {
   code: ErrorCode;
   description: string;
+  information: {
+    name?: string,
+    color?: Color,
+  }
 }
 
 export type GroupData = {
