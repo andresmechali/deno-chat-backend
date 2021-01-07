@@ -62,23 +62,21 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
              */
             const usersInGroup: User[] = group.users;
 
-            if (usersInGroup.length > 0) {
-              for (const _user of usersInGroup) {
-                if (_user.name === name) {
-                  const nameUsedEvent = {
-                    code: Code.ERROR,
-                    data: {
-                      error: {
-                        code: ErrorCode.NAME_USED,
-                        description:
-                          `User ${name} already exists in current group`,
-                      },
-                    },
-                  };
-                  ws.send(JSON.stringify(nameUsedEvent));
-                  return;
-                }
-              }
+            const existingUser = usersInGroup.find(_user => _user.name === name);
+
+            if (existingUser) {
+              const nameUsedEvent = {
+                code: Code.ERROR,
+                data: {
+                  error: {
+                    code: ErrorCode.NAME_USED,
+                    description:
+                        `User ${name} already exists in current group. Try another name.`,
+                  },
+                },
+              };
+              ws.send(JSON.stringify(nameUsedEvent));
+              break;
             }
 
             // Create user
