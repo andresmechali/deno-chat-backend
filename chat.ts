@@ -42,7 +42,11 @@ export const emitUpdateUsers = (users: User[]): void => {
     },
   };
   for (const user of users) {
-    user.ws.send(JSON.stringify(event));
+    try {
+      user.ws.send(JSON.stringify(event));
+    } catch (e) {
+      console.log("Socket is closed -> ", e);
+    }
   }
 };
 
