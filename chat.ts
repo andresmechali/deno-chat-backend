@@ -9,7 +9,10 @@ export const emitPing = (user: User): void => {
   const event = {
     code: Code.PING,
   };
-  user.ws.send(JSON.stringify(event));
+
+  if (!user.ws.isClosed) {
+    user.ws.send(JSON.stringify(event));
+  }
 };
 
 /**
@@ -26,7 +29,10 @@ export const emitNewUser = (user: User): void => {
       user: newUser,
     },
   };
-  ws.send(JSON.stringify(event));
+
+  if (!user.ws.isClosed) {
+    ws.send(JSON.stringify(event));
+  }
 };
 
 /**
@@ -41,8 +47,11 @@ export const emitUpdateUsers = (users: User[]): void => {
       users,
     },
   };
+
   for (const user of users) {
-    user.ws.send(JSON.stringify(event));
+    if (!user.ws.isClosed) {
+      user.ws.send(JSON.stringify(event));
+    }
   }
 };
 
@@ -61,8 +70,11 @@ export const emitMessage = (users: User[], message: Message): void => {
       },
     },
   };
+
   for (const user of users) {
-    user.ws.send(JSON.stringify(event));
+    if (!user.ws.isClosed) {
+      user.ws.send(JSON.stringify(event));
+    }
   }
 };
 
@@ -80,7 +92,10 @@ export const emitGetMessages = (users: User[], userId: string): void => {
         requestedUserId: userId,
       },
     };
-    firstUser.ws.send(JSON.stringify(event));
+
+    if (!firstUser.ws.isClosed) {
+      firstUser.ws.send(JSON.stringify(event));
+    }
   }
 };
 
@@ -100,6 +115,9 @@ export const emitMessages = (
         messages,
       },
     };
-    requestedUser.ws.send(JSON.stringify(event));
+
+    if (!requestedUser.ws.isClosed) {
+      requestedUser.ws.send(JSON.stringify(event));
+    }
   }
 };

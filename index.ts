@@ -13,11 +13,10 @@ import {
   emitPing,
   emitUpdateUsers,
 } from "./chat.ts";
+import { Code, Color, ErrorCode, GroupData, User } from "./types.ts";
 
 const hostname: string = "0.0.0.0";
 const port: number = parseInt(Deno.env.get("PORT") || "8080", 10);
-
-import { Code, Color, ErrorCode, GroupData, User } from "./types.ts";
 
 // Create Maps to store data
 const usersMap = new Map<string, User>();
@@ -42,6 +41,7 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
         const event = typeof data === "string"
           ? JSON.parse(data.toString())
           : data;
+
         switch (event.code) {
           case Code.JOIN: {
             /**
@@ -58,7 +58,7 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
             };
 
             /**
-             * If user already exists, tell client
+             * Check if user already exists, and tell client if it does
              */
             const usersInGroup: User[] = group.users;
 
@@ -79,7 +79,11 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                   },
                 },
               };
-              ws.send(JSON.stringify(nameUsedEvent));
+
+              if (!ws.isClosed) {
+                ws.send(JSON.stringify(nameUsedEvent));
+              }
+
               break;
             }
 
@@ -114,6 +118,11 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
             break;
           }
           case Code.RETURN_MESSAGES: {
+            /**
+             * When old messages are received, send them to the recently
+             * join user
+             */
+
             const { messages, requestedUserId } = event.data;
             const requestedUser = usersMap.get(requestedUserId);
             if (requestedUser) {
@@ -126,6 +135,7 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
              * EndpointUnavailable
              * Client has become unavailable
              */
+
             // Get user who left
             const user = usersMap.get(userId);
 
@@ -142,6 +152,7 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
                   return u.userId !== userId;
                 }) || [];
 
+                // If group is empty, delete it
                 if (nextUsers.length === 0) {
                   groupsDataMap.delete(groupName);
                 } else {
@@ -160,9 +171,14 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
             break;
           }
           case Code.MESSAGE: {
+            /**
+             * New message received
+             */
+
             const { message } = event.data;
             const groupName = usersMap.get(message.user.userId)?.groupName;
 
+            // Broadcast message to all users in group
             if (groupName) {
               const users = groupsDataMap.get(groupName)?.users || [];
               emitMessage(users, message);
@@ -171,6 +187,10 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
             break;
           }
           case Code.PING: {
+            /**
+             * Regular ping for monitoring connection
+             */
+
             const user = usersMap.get(userId);
             if (user) {
               emitPing(user);
@@ -178,8 +198,7 @@ listenAndServe({ hostname, port }, (req: ServerRequest) => {
             break;
           }
           default: {
-            console.log("unhandled event");
-            console.log(event);
+            console.log("Unhandled event:", event);
             break;
           }
         }
